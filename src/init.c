@@ -1,8 +1,10 @@
-#include <stdio.h>
+#include "init.h"
+#include "datadef.h"
+
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
-#include "datadef.h"
+#include <stdio.h>
 
 /* Modified slightly by D. Orchard (2010) from the classic code from: 
 

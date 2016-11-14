@@ -1,12 +1,14 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <math.h>
+#include "simulation.h"
 #include "datadef.h"
 #include "init.h"
 #include "alloc.h"
 
-#define max(x,y) ((x)>(y)?(x):(y))
-#define min(x,y) ((x)<(y)?(x):(y))
+#include <stdlib.h>
+#include <math.h>
+#include <stdio.h>
+
+#define max(x,y) ((x) > (y) ? (x) : (y))
+#define min(x,y) ((x) < (y) ? (x) : (y))
 
 extern int *ileft, *iright;
 extern int nprocs, proc;

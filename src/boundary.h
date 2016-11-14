@@ -1,2 +1,8 @@
+#ifndef NS_BOUNDARY_H_
+#define NS_BOUNDARY_H_
+
 void apply_boundary_conditions(double **u, double **v, char **flag,
-    int imax, int jmax, double ui, double vi);
+    const int imax, const int jmax, const double ui, const double vi);
+
+#endif /* BOUNDARY_H_ */
+

@@ -1,3 +1,6 @@
+#ifndef NS_DATADEF_H_
+#define NS_DATADEF_H_
+
 #define C_B      0x0000   /* This cell is an obstacle/boundary cell */
 #define B_N      0x0001   /* This obstacle cell has a fluid cell to the north */
 #define B_S      0x0002   /* This obstacle cell has a fluid cell to the south */
@@ -25,3 +28,6 @@ void write_ppm(double** u, double** v, double** p, char** flag,
 
 unsigned int simplest_checksum_char(char** in, int imax, int jmax);
 double simplest_checksum(double** in, int imax, int jmax);
+
+#endif /* NS_DATADEF_H_ */
+

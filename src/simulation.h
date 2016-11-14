@@ -1,3 +1,6 @@
+#ifndef NS_SIMULATION_H_
+#define NS_SIMULATION_H_
+
 void compute_tentative_velocity(double **u, double **v, double **f, double **g,
     char **flag, int imax, int jmax, double del_t, double delx, double dely,
     double gamma, double Re);
@@ -14,3 +17,6 @@ void update_velocity(double **u, double **v, double **f, double **g, double **p,
 
 void set_timestep_interval(double *del_t, int imax, int jmax, double delx,
     double dely, double **u, double **v, double Re, double tau);
+
+#endif /* NS_SIMULATION_H_ */
+
