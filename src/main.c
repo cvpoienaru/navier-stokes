@@ -51,8 +51,6 @@ double simplest_checksum(double** in, int imax, int jmax)
 
 int main(int argc, char **argv)
 {
-	/* Verbosity level. */
-	int verbose = 1;
 	/* Width of simulated domain. */
 	double xlength = 22.0;
 	/* Height of simulated domain. */
@@ -69,7 +67,7 @@ int main(int argc, char **argv)
 	/* Simulation runtime. */
 	double t_end = 40;
 	/* Duration of each timestep. */
-	double del_t = 0.3;
+	double del_t = 0.003;
 	/* Safety factor for timestep control. */
 	double tau = 0.5;
 
@@ -94,12 +92,12 @@ int main(int argc, char **argv)
 	double res;
 	double **u, **v, **p, **rhs, **f, **g;
 	char **flag;
-	int init_case, iters = 0;
+	int iters = 0;
 
 	unsigned long checker = 0;
 	double checker1 = 0.0;
 
-	if (argc > 1) {
+	/*if (argc > 1) {
 		output = 1;
 		outname = argv[1];
 		output_frequency = 1;
@@ -107,7 +105,7 @@ int main(int argc, char **argv)
 
 	if (argc > 2) {
 		output_frequency = atoi(argv[2]);
-	}
+	}*/
 
 	delx = xlength/imax;
 	dely = ylength/jmax;
@@ -154,8 +152,10 @@ int main(int argc, char **argv)
 				eps, itermax, omega, &res, ifluid);
 		}
 
-		/* printf("%d t:%g, del_t:%g, SOR iters:%3d, res:%e, bcells:%d\n",
-		iters, t+del_t, del_t, itersor, res, ibound); */
+		if(NS_DEBUG_LEVEL) {
+			printf("%d t:%g, del_t:%g, SOR iters:%3d, res:%e, bcells:%d\n",
+				iters, t+del_t, del_t, itersor, res, ibound);
+		}
 
 		update_velocity(u, v, f, g, p, flag, imax, jmax, del_t, delx, dely);
 		apply_boundary_conditions(u, v, flag, imax, jmax, ui, vi);

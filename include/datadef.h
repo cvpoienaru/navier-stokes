@@ -1,6 +1,9 @@
 #ifndef NS_DATADEF_H_
 #define NS_DATADEF_H_
 
+/** Define debugging level. */
+#define NS_DEBUG_LEVEL 1
+
 /** This cell is an obstacle/boundary cell. */
 #define C_B 0x0000
 /** This obstacle cell has a fluid cell to the north. */
@@ -44,7 +47,7 @@ void write_ppm(
 	const int jmax,
 	const double xlength,
 	const double ylength,
-	char* outname,
+	const char* outname,
 	const int iters,
 	const int freq);
 

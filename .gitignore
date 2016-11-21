@@ -34,3 +34,5 @@
 
 profiling/
 outputs/
+bin/
+lib/

@@ -1,0 +1,121 @@
+#!/bin/bash
+
+# Copyright (c) 2016, Codrin-Victor Poienaru <cvpoienaru@gmail.com>.
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice, this
+# list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+# this list of conditions and the following disclaimer in the documentation
+# and/or other materials provided with the distribution.
+#
+# This software is provided by the copyright holders and contributors "as is"
+# and any express or implied warranties, including, but not limited to, the
+# implied warranties of merchantability and fitness for a particular purpose are
+# disclaimed. In no event shall the copyright holder or contributors be liable
+# for any direct, indirect, incidental, special, exemplary, or consequential
+# damages (including, but not limited to, procurement of substitute goods or
+# services; loss of use, data, or profits; or business interruption) however
+# caused and on any theory of liability, whether in contract, strict liability,
+# or tort (including negligence or otherwise) arising in any way out of the use
+# of this software, even if advised of the possibility of such damage.
+
+# Project tree structure ...
+export NS_ROOT=~/Work/Projects/NavierStokes/navier-stokes
+export NS_BIN=$NS_ROOT/bin
+export NS_ETC=$NS_ROOT/etc
+export NS_INCLUDE=$NS_ROOT/include
+export NS_LIB=$NS_ROOT/lib
+export NS_SCRIPT=$NS_ROOT/script
+export NS_SRC=$NS_ROOT/src
+
+# Project tree permission mask ...
+export NS_MASK=0022
+
+# Project build options ...
+export NS_DEBUG=true
+export NS_MAKE_PATH=$NS_SRC/Makefile
+export NS_BUILD_THREADS=$(cat /proc/cpuinfo | awk '/^processor/{print $3}' \
+	| wc -l)
+if $NS_DEBUG; then
+	export NS_FLAGS=-g
+fi
+
+# Environment paths ...
+export C_INCLUDE_PATH=$NS_INCLUDE
+export LIBRARY_PATH=$NS_LIB
+export LD_LIBRARY_PATH=$NS_LIB
+export PATH=$PATH:$NS_BIN
+
+# Set custom project tree permission mask.
+umask $NS_MASK
+
+# Creates the missing directories from the project tree structure.
+function __ns_make_directory_structure()
+{
+	mkdir -p $NS_BIN
+	mkdir -p $NS_LIB
+}
+
+# Removes unneeded directories from the project tree structure.
+function __ns_clean_directory_structure()
+{
+	rm -rf $NS_BIN
+	rm -rf $NS_LIB
+}
+
+# Builds the project binaries and/or libraries from source.
+# $1 makefile - The makefile to be used for building.
+function __ns_make_build()
+{
+	if [[ $# -ne 1 ]]; then
+		echo -e "Error: Cannot make build. No makefile was supplied."
+		return
+	fi
+
+	make -f $1 -j $NS_BUILD_THREADS
+}
+
+# Cleans the project binaries and/or libraries.
+# $1 makefile - The makefile to be used for cleaning.
+function __ns_clean_build()
+{
+	if [[ $# -ne 1 ]]; then
+		echo -e "Error: Cannot clean build. No makefile was supplied."
+		return
+	fi
+
+	make -f $1 clean
+}
+
+# Builds or cleans the project binaries and/or libraries according to the
+# specified options.
+# $1 option - Specifies whether we should build or clean the project binaries
+# and libraries.
+function ns_build()
+{
+	if [[ $# -ne 1 ]]; then
+		echo -e "Error: Call with --build|-b or --clean|-c."
+		return
+	fi
+
+	case $1 in
+		--build|-b)
+			__ns_make_directory_structure
+			__ns_make_build $NS_MAKE_PATH
+		;;
+
+		--clean|-c)
+			__ns_clean_build $NS_MAKE_PATH
+			__ns_clean_directory_structure
+		;;
+
+		*)
+			echo "Error: Unknown option '$1'."
+		;;
+	esac
+}
