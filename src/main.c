@@ -52,40 +52,40 @@ double simplest_checksum(double** in, int imax, int jmax)
 int main(int argc, char **argv)
 {
 	/* Width of simulated domain. */
-	double xlength = 22.0;
+	double xlength = atof(argv[1]);
 	/* Height of simulated domain. */
-	double ylength = 4.1;
+	double ylength = atof(argv[2]);
 	/* Number of cells horizontally. */
-	int imax = 660;
+	int imax = atoi(argv[3]);
 	/* Number of cells vertically. */
-	int jmax = 120;
+	int jmax = atoi(argv[4]);
 
 	char *outname;
 	int output = 0;
 	int output_frequency = 0;
 
 	/* Simulation runtime. */
-	double t_end = 40;
+	double t_end = atof(argv[5]);
 	/* Duration of each timestep. */
-	double del_t = 0.003;
+	double del_t = atof(argv[6]);
 	/* Safety factor for timestep control. */
-	double tau = 0.5;
+	double tau = atof(argv[7]);
 
 	/* Maximum number of iterations in SOR. */
-	int itermax = 100;
+	int itermax = atoi(argv[8]);
 	/* Stopping error threshold for SOR. */
-	double eps = 0.001;
+	double eps = atof(argv[9]);
 	/* Relaxation parameter for SOR. */
-	double omega = 1.7;
+	double omega = atof(argv[10]);
 	/* Upwind differencing factor in PDE discretisation. */
-	double gamma = 0.9;
+	double gamma = atof(argv[11]);
 
 	/* Reynolds number. */
-	double Re = 150.0;
+	double Re = atof(argv[12]);
 	/* Initial X velocity. */
-	double ui = 1.0;
+	double ui = atof(argv[13]);
 	/* Initial Y velocity. */
-	double vi = 0.0;
+	double vi = atof(argv[14]);
 
 	double t, delx, dely;
 	int i, j, itersor = 0, ifluid = 0, ibound = 0;
