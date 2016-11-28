@@ -15,9 +15,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 #include <getopt.h>
 #include <errno.h>
 #include <mpi.h>
+
+#define MASTER 0
 
 /* Functions used for comparing computations when debugging. */
 unsigned int simplest_checksum_char(char** in, int imax, int jmax)
@@ -60,11 +63,14 @@ int main(int argc, char **argv)
 	double t, delx, dely;
 	int i, j, itersor = 0, ifluid = 0, ibound = 0;
 	double res;
-	double **u, **v, **p, **rhs, **f, **g;
-	char **flag;
+	double **u = NULL, **v = NULL, **p = NULL, **rhs = NULL, **f = NULL,
+		**g = NULL;
+	char **flag = NULL;
 	int iters = 0;
 	unsigned long checker = 0;
 	double checker1 = 0.0;
+	int rank, size;
+	int ret = 0;
 
 	/* Width of simulated domain. */
 	double xlength = atof(argv[1]);
@@ -96,45 +102,58 @@ int main(int argc, char **argv)
 	double vi = atof(argv[14]);
 
 	MPI_Init(&argc, &argv);
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-	delx = xlength/imax;
-	dely = ylength/jmax;
-
-	/* Allocate arrays. */
-	u = alloc_doublematrix(imax + 2, jmax + 2);
-	v = alloc_doublematrix(imax + 2, jmax + 2);
-	f = alloc_doublematrix(imax + 2, jmax + 2);
-	g = alloc_doublematrix(imax + 2, jmax + 2);
-	p = alloc_doublematrix(imax + 2, jmax + 2);
-	rhs = alloc_doublematrix(imax + 2, jmax + 2);
-	flag = alloc_charmatrix(imax + 2, jmax + 2);
-
-	if (!u || !v || !f || !g || !p || !rhs || !flag) {
-		fprintf(stderr, "Error: Couldn't allocate memory for matrices.\n");
-		return -1;
-	}
-
-	/* Set up initial values. */
-	for (i = 0; i <= imax + 1; ++i) {
-		for (j = 0; j <= jmax + 1; ++j) {
-			checker += (i * jmax) + j + 1;
-			checker1 += (i * jmax) + j + 1.0;
-			u[i][j] = ui;
-			v[i][j] = vi;
-			p[i][j] = 0.0;
+	if(rank == MASTER) {
+		if(sqrt(size) != (int)sqrt(size)) {
+			fprintf(stderr, "Error: Number of tasks must be perfect square.\n");
+			ret = -1;
+			goto exit;
 		}
-	}
 
-	init_flag(flag, imax, jmax, delx, dely, &ibound);
-	apply_boundary_conditions(u, v, flag, imax, jmax, ui, vi);
+		delx = xlength/imax;
+		dely = ylength/jmax;
+
+		/* Allocate arrays. */
+		u = alloc_doublematrix(imax + 2, jmax + 2);
+		v = alloc_doublematrix(imax + 2, jmax + 2);
+		f = alloc_doublematrix(imax + 2, jmax + 2);
+		g = alloc_doublematrix(imax + 2, jmax + 2);
+		p = alloc_doublematrix(imax + 2, jmax + 2);
+		rhs = alloc_doublematrix(imax + 2, jmax + 2);
+		flag = alloc_charmatrix(imax + 2, jmax + 2);
+
+		if (!u || !v || !f || !g || !p || !rhs || !flag) {
+			fprintf(stderr, "Error: Couldn't allocate memory for matrices.\n");
+			ret = -1;
+			goto exit;
+		}
+
+		/* Set up initial values. */
+		for (i = 0; i <= imax + 1; ++i) {
+			for (j = 0; j <= jmax + 1; ++j) {
+				checker += (i * jmax) + j + 1;
+				checker1 += (i * jmax) + j + 1.0;
+				u[i][j] = ui;
+				v[i][j] = vi;
+				p[i][j] = 0.0;
+			}
+		}
+
+		init_flag(flag, imax, jmax, delx, dely, &ibound);
+		apply_boundary_conditions(u, v, flag, imax, jmax, ui, vi);
+	}
 
 	for (t = 0.0; t < t_end; t += del_t, ++iters) {
-		set_timestep_interval(&del_t, imax, jmax, delx, dely, u, v, Re, tau);
+		if(rank == MASTER) {
+			set_timestep_interval(&del_t, imax, jmax, delx, dely, u, v, Re, tau);
 
-		ifluid = (imax * jmax) - ibound;
-		compute_tentative_velocity(u, v, f, g, flag, imax, jmax,
-			del_t, delx, dely, gamma, Re);
-		compute_rhs(f, g, rhs, flag, imax, jmax, del_t, delx, dely);
+			ifluid = (imax * jmax) - ibound;
+			compute_tentative_velocity(u, v, f, g, flag, imax, jmax,
+				del_t, delx, dely, gamma, Re);
+			compute_rhs(f, g, rhs, flag, imax, jmax, del_t, delx, dely);
+		}
 
 		itersor = 0;
 		if (ifluid > 0) {
@@ -142,24 +161,39 @@ int main(int argc, char **argv)
 				eps, itermax, omega, &res, ifluid);
 		}
 
-		if(NS_DEBUG_LEVEL) {
-			printf("%d t:%g, del_t:%g, SOR iters:%3d, res:%e, bcells:%d\n",
-				iters, t+del_t, del_t, itersor, res, ibound);
-		}
+		if(rank == MASTER) {
+			if(NS_DEBUG_LEVEL) {
+				printf("%d t:%g, del_t:%g, SOR iters:%3d, res:%e, bcells:%d\n",
+					iters, t+del_t, del_t, itersor, res, ibound);
+			}
 
-		update_velocity(u, v, f, g, p, flag, imax, jmax, del_t, delx, dely);
-		apply_boundary_conditions(u, v, flag, imax, jmax, ui, vi);
+			update_velocity(u, v, f, g, p, flag, imax, jmax, del_t, delx, dely);
+			apply_boundary_conditions(u, v, flag, imax, jmax, ui, vi);
+		}
 	}
 
-	free_matrix(u);
-	free_matrix(v);
-	free_matrix(f);
-	free_matrix(g);
-	free_matrix(p);
-	free_matrix(rhs);
-	free_matrix(flag);
+exit:
+	if(rank == MASTER) {
+		if(u)
+			free_matrix(u);
+		if(v)
+			free_matrix(v);
+		if(f)
+			free_matrix(f);
+		if(g)
+			free_matrix(g);
+		if(p)
+			free_matrix(p);
+		if(rhs)
+			free_matrix(rhs);
+		if(flag)
+			free_matrix(flag);
 
-	MPI_Finalize();
+		int initialized = 0;
+		MPI_Initialized(&initialized);
+		if(initialized)
+			MPI_Finalize();
+	}
 
-	return 0;
+	return ret;
 }
