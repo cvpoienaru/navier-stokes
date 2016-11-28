@@ -194,7 +194,7 @@ int poisson(
 							* ((p[i + 1][j] + p[i - 1][j]) * rdx2
 								+ (p[i][j + 1] + p[i][j - 1]) * rdy2
 								- rhs[i][j]);
-					} else if (flag[i][j] & C_F) { 
+					} else if (flag[i][j] & C_F) {
 						/* Modified star near boundary. */
 						beta_mod = -omega / ((eps_E + eps_W) * rdx2
 							+(eps_N + eps_S) * rdy2);
