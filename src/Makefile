@@ -37,7 +37,7 @@ NS_SOURCES = $(NS_BIN_SRC)/alloc.c \
 NS_OBJECTS = $(NS_SOURCES:.c=.o)
 
 # Compiler options
-CC = gcc
+CC = mpicc
 CFLAGS = -Wall -O3 $(NS_FLAGS) -pg
 LFLAGS = -lm
 

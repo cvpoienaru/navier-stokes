@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <getopt.h>
 #include <errno.h>
+#include <mpi.h>
 
 /* Functions used for comparing computations when debugging. */
 unsigned int simplest_checksum_char(char** in, int imax, int jmax)
@@ -51,6 +52,20 @@ double simplest_checksum(double** in, int imax, int jmax)
 
 int main(int argc, char **argv)
 {
+	if(argc != 15) {
+		fprintf(stderr, "Error: Not enough arguments.\n");
+		return -1;
+	}
+
+	double t, delx, dely;
+	int i, j, itersor = 0, ifluid = 0, ibound = 0;
+	double res;
+	double **u, **v, **p, **rhs, **f, **g;
+	char **flag;
+	int iters = 0;
+	unsigned long checker = 0;
+	double checker1 = 0.0;
+
 	/* Width of simulated domain. */
 	double xlength = atof(argv[1]);
 	/* Height of simulated domain. */
@@ -59,18 +74,12 @@ int main(int argc, char **argv)
 	int imax = atoi(argv[3]);
 	/* Number of cells vertically. */
 	int jmax = atoi(argv[4]);
-
-	char *outname;
-	int output = 0;
-	int output_frequency = 0;
-
 	/* Simulation runtime. */
 	double t_end = atof(argv[5]);
 	/* Duration of each timestep. */
 	double del_t = atof(argv[6]);
 	/* Safety factor for timestep control. */
 	double tau = atof(argv[7]);
-
 	/* Maximum number of iterations in SOR. */
 	int itermax = atoi(argv[8]);
 	/* Stopping error threshold for SOR. */
@@ -79,7 +88,6 @@ int main(int argc, char **argv)
 	double omega = atof(argv[10]);
 	/* Upwind differencing factor in PDE discretisation. */
 	double gamma = atof(argv[11]);
-
 	/* Reynolds number. */
 	double Re = atof(argv[12]);
 	/* Initial X velocity. */
@@ -87,25 +95,7 @@ int main(int argc, char **argv)
 	/* Initial Y velocity. */
 	double vi = atof(argv[14]);
 
-	double t, delx, dely;
-	int i, j, itersor = 0, ifluid = 0, ibound = 0;
-	double res;
-	double **u, **v, **p, **rhs, **f, **g;
-	char **flag;
-	int iters = 0;
-
-	unsigned long checker = 0;
-	double checker1 = 0.0;
-
-	/*if (argc > 1) {
-		output = 1;
-		outname = argv[1];
-		output_frequency = 1;
-	}
-
-	if (argc > 2) {
-		output_frequency = atoi(argv[2]);
-	}*/
+	MPI_Init(&argc, &argv);
 
 	delx = xlength/imax;
 	dely = ylength/jmax;
@@ -120,8 +110,8 @@ int main(int argc, char **argv)
 	flag = alloc_charmatrix(imax + 2, jmax + 2);
 
 	if (!u || !v || !f || !g || !p || !rhs || !flag) {
-		fprintf(stderr, "Couldn't allocate memory for matrices.\n");
-		return 1;
+		fprintf(stderr, "Error: Couldn't allocate memory for matrices.\n");
+		return -1;
 	}
 
 	/* Set up initial values. */
@@ -159,11 +149,6 @@ int main(int argc, char **argv)
 
 		update_velocity(u, v, f, g, p, flag, imax, jmax, del_t, delx, dely);
 		apply_boundary_conditions(u, v, flag, imax, jmax, ui, vi);
-
-		if (output && (iters % output_frequency == 0)) {
-			write_ppm(u, v, p, flag, imax, jmax, xlength, ylength, outname,
-				iters, output_frequency);
-		}
 	}
 
 	free_matrix(u);
@@ -173,6 +158,8 @@ int main(int argc, char **argv)
 	free_matrix(p);
 	free_matrix(rhs);
 	free_matrix(flag);
+
+	MPI_Finalize();
 
 	return 0;
 }

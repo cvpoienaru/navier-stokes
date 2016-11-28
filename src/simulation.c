@@ -141,7 +141,6 @@ void compute_rhs(
 	}
 }
 
-
 /**
  * Red/Black SOR to solve the poisson equation.
  */
