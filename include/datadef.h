@@ -29,6 +29,9 @@
 /** This cell is a fluid cell. */
 #define C_F 0x0010
 
+/** Define the MPI master node. */
+#define MASTER 0
+
 /**
  * Macros for computing Poisson, denoting whether there is an obstacle cell
  * adjacent to some direction.

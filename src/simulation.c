@@ -14,12 +14,40 @@
 #include <stdlib.h>
 #include <math.h>
 #include <stdio.h>
+#include <mpi.h>
 
 #define max(x,y) ((x) > (y) ? (x) : (y))
 #define min(x,y) ((x) < (y) ? (x) : (y))
 
 extern int *ileft, *iright;
 extern int nprocs, proc;
+
+struct sim_element* alloc_sim_element(void)
+{
+	struct sim_element *element = NULL;
+	element = (struct sim_element*)malloc(sizeof(struct sim_element));
+	if(!element)
+		return element;
+
+	element->row = 0;
+	element->column = 0;
+	element->result = 0.0;
+	element->north = 0.0;
+	element->south = 0.0;
+	element->east = 0.0;
+	element->west = 0.0;
+
+	return element;
+}
+
+void free_sim_element(struct sim_element **element)
+{
+	if(!element || !(*element))
+		return;
+
+	free(*element);
+	*element = NULL;
+}
 
 /**
  * Computation of tentative velocity field (f, g).
@@ -141,6 +169,66 @@ void compute_rhs(
 	}
 }
 
+int compute_product_sum(
+	double **p,
+	char **flag,
+	const int imax,
+	const int jmax,
+	const int rank,
+	const int size)
+{
+	int i, j;
+	double p0 = 0.0;
+	int sum_chunk_size = (imax * jmax) / size;
+	int sum_start = rank * sum_chunk_size;
+	int sum_end = (rank == size - 1)
+		? imax * jmax
+		: (rank + 1) * sum_chunk_size;
+	int sum_start_j = (sum_start % jmax) + 1;
+	int sum_start_i = ((sum_start - sum_start_j) % imax) + 1;
+	int sum_end_j = (sum_end % jmax) + 1;
+	int sum_end_i = ((sum_end - sum_end_j) % imax) + 1;
+	MPI_Status stat;
+
+	/* Calculate sum of squares */
+	i = sum_start_i;
+	j = sum_start_j;
+	while(i <= imax) {
+		while(j <= jmax) {
+			if(i == sum_end_i && j == sum_end_j)
+				goto mpi_send;
+
+			if(flag[i][j] & C_F)
+				p0 += p[i][j] * p[i][j];
+			++j;
+		}
+		j = 1;
+		++i;
+	}
+
+mpi_send:
+	if(rank == MASTER) {
+		int recv = size - 1;
+		double psum = 0.0;
+
+		while(recv > 0) {
+			MPI_Recv(&psum, 1, MPI_DOUBLE, MPI_ANY_SOURCE, MPI_ANY_TAG,
+				MPI_COMM_WORLD, &stat);
+			--recv;
+			p0 += psum;
+		}
+		for(i = 1; i < size; ++i) {
+			MPI_Send(&p0, 1, MPI_DOUBLE, i, i, MPI_COMM_WORLD);
+		}
+	} else {
+		MPI_Send(&p0, 1, MPI_DOUBLE, MASTER, 0, MPI_COMM_WORLD);
+		MPI_Recv(&p0, 1, MPI_DOUBLE, MPI_ANY_SOURCE, MPI_ANY_TAG,
+			MPI_COMM_WORLD, &stat);
+	}
+
+	return p0;
+}
+
 /**
  * Red/Black SOR to solve the poisson equation.
  */
@@ -158,6 +246,7 @@ int poisson(
 	double *res,
 	const int ifull)
 {
+	int rank, size, rb;
 	int i, j, iter;
 	double add, beta_2, beta_mod;
 	double p0 = 0.0;
@@ -165,16 +254,11 @@ int poisson(
 	double rdy2 = 1.0 / (dely * dely);
 	beta_2 = -omega / (2.0 * (rdx2 + rdy2));
 
-	/* Red-black value. */
-	int rb;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-	/* Calculate sum of squares */
-	for (i = 1; i <= imax; ++i) {
-		for (j = 1; j <= jmax; ++j) {
-			if (flag[i][j] & C_F)
-				p0 += p[i][j] * p[i][j];
-		}
-	}
+	p0 = compute_product_sum(p, flag, imax, jmax, rank, size);
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	p0 = sqrt(p0 / ifull);
 	if (p0 < 0.0001)
@@ -234,7 +318,6 @@ int poisson(
 	return iter;
 }
 
-
 /**
  * Update the velocity values based on the tentative velocity values and the new
  * pressure matrix.
@@ -272,7 +355,6 @@ void update_velocity(
 		}
 	}
 }
-
 
 /**
  * Set the timestep size so that we satisfy the Courant-Friedrichs-Lewy
