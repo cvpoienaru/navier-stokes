@@ -47,6 +47,7 @@ fi
 
 # Environment paths ...
 export C_INCLUDE_PATH=$NS_INCLUDE:/usr/include/mpi
+export CPLUS_INCLUDE_PATH=$NS_INCLUDE:/usr/include/mpi
 export LIBRARY_PATH=$NS_LIB
 export LD_LIBRARY_PATH=$NS_LIB
 export PATH=$PATH:$NS_BIN
