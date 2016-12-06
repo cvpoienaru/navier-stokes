@@ -39,7 +39,7 @@ NS_OBJECTS = $(NS_SOURCES:.c=.o)
 # Compiler options
 CC = mpic++
 CFLAGS = -Wall -O3 $(NS_FLAGS) -pg
-LFLAGS = -lm
+LFLAGS = -lm -ltbb
 
 all: $(NS_SOURCES) $(NS_BIN_OUT)
 

@@ -22,33 +22,6 @@
 extern int *ileft, *iright;
 extern int nprocs, proc;
 
-struct sim_element* alloc_sim_element(void)
-{
-	struct sim_element *element = NULL;
-	element = (struct sim_element*)malloc(sizeof(struct sim_element));
-	if(!element)
-		return element;
-
-	element->row = 0;
-	element->column = 0;
-	element->result = 0.0;
-	element->north = 0.0;
-	element->south = 0.0;
-	element->east = 0.0;
-	element->west = 0.0;
-
-	return element;
-}
-
-void free_sim_element(struct sim_element **element)
-{
-	if(!element || !(*element))
-		return;
-
-	free(*element);
-	*element = NULL;
-}
-
 /**
  * Computation of tentative velocity field (f, g).
  */
@@ -169,7 +142,7 @@ void compute_rhs(
 	}
 }
 
-int compute_product_sum(
+static const int compute_product_sum(
 	double **p,
 	char **flag,
 	const int imax,
@@ -229,6 +202,296 @@ mpi_send:
 	return p0;
 }
 
+static void range_to_index(
+	const int cols,
+	const int s_i,
+	const int s_j,
+	const int e_n,
+	int *e_i,
+	int *e_j)
+{
+	int n = e_n + (s_i * cols + s_j);
+	*e_j = n % cols;
+	*e_i = n / cols;
+}
+
+static void index_to_range(
+	const int cols,
+	const int s_i,
+	const int s_j,
+	const int e_i,
+	const int e_j,
+	int *e_n)
+{
+	*e_n = (e_i * cols + e_j) - (s_i * cols + s_j);
+}
+
+static double* copy_poisson_range(
+	double **p,
+	const int rows,
+	const int cols,
+	const int start_i,
+	const int start_j,
+	const int end_i,
+	const int end_j,
+	int *elements_no)
+{
+	int i = start_i;
+	int j = start_j;
+	int k = -1;
+	double *range = NULL;
+
+	*elements_no = ((end_i - start_i) * cols + 1) + (end_j - start_j);
+	range = (double*)malloc(*elements_no * sizeof(double));
+	if(!range)
+		goto exit;
+
+	while(i < rows) {
+		while(j < cols) {
+			if(i == rows - 1 && j == cols)
+				goto exit;
+
+			range[++k] = p[i][j];
+			++j;
+		}
+
+		j = 0;
+		++i;
+	}
+
+exit:
+	return range;
+}
+
+static void do_slave_p(
+	double **rhs,
+	char **flag,
+	const int rows,
+	const int cols,
+	const double omega,
+	const double beta_2,
+	const double rdx2,
+	const double rdy2)
+{
+	int i, valid, range_size, rb;
+	int e_i, e_j, s_i, s_j;
+	int north_i, south_i, east_i, west_i;
+	double north, south, east, west;
+	double beta_mod;
+	double *range = NULL;
+	MPI_Status stat;
+
+	MPI_Recv(&s_i, 1, MPI_INT, MASTER, MPI_ANY_TAG, MPI_COMM_WORLD,
+		&stat);
+	MPI_Recv(&s_j, 1, MPI_INT, MASTER, MPI_ANY_TAG, MPI_COMM_WORLD,
+		&stat);
+	MPI_Recv(&range_size, 1, MPI_INT, MASTER, MPI_ANY_TAG, MPI_COMM_WORLD,
+		&stat);
+	MPI_Recv(&rb, 1, MPI_INT, MASTER, MPI_ANY_TAG, MPI_COMM_WORLD,
+		&stat);
+
+	range = (double*)malloc(range_size * sizeof(double));
+	if(!range)
+		return;
+
+	MPI_Recv(range, range_size, MPI_DOUBLE, MASTER, MPI_ANY_TAG, MPI_COMM_WORLD,
+		&stat);
+
+	for(i = cols; i < range_size - cols; ++i) {
+		range_to_index(cols, s_i, s_j, i, &e_i, &e_j);
+
+		valid = (e_i >= 1 && e_i <= rows - 2) && (e_j >= 1 && e_j <= cols - 2)
+			&& ((e_i + e_j) % 2 == rb);
+		if(!valid)
+			continue;
+
+		index_to_range(cols, s_i, s_j, e_i - 1, e_j, &north_i);
+		index_to_range(cols, s_i, s_j, e_i + 1, e_j, &south_i);
+		index_to_range(cols, s_i, s_j, e_i, e_j + 1, &east_i);
+		index_to_range(cols, s_i, s_j, e_i, e_j - 1, &west_i);
+		north = range[north_i];
+		south = range[south_i];
+		east = range[east_i];
+		west = range[west_i];
+
+		if (flag[e_i][e_j] == (C_F | B_NSEW)) {
+			/* Five point star for interior fluid cells. */
+			range[i] = (1.0 - omega) * range[i] - beta_2
+				* ((south + north) * rdx2
+					+ (east + west) * rdy2
+					- rhs[e_i][e_j]);
+		} else if (flag[e_i][e_j] & C_F) {
+			/* Modified star near boundary. */
+			beta_mod = -omega / ((eps_E(e_i, e_j) + eps_W(e_i, e_j)) * rdx2
+				+ (eps_N(e_i, e_j) + eps_S(e_i, e_j)) * rdy2);
+			range[i] = (1.0 - omega) * range[i] - beta_mod
+				* ((eps_E(e_i, e_j) * south + eps_W(e_i, e_j) * north) * rdx2
+					+ (eps_S(e_i, e_j) * east + eps_N(e_i, e_j) * west) * rdy2
+					- rhs[e_i][e_j]);
+		}
+	}
+
+	MPI_Send(&range_size, 1, MPI_INT, MASTER, MASTER, MPI_COMM_WORLD);
+	MPI_Send(range, range_size, MPI_DOUBLE, MASTER, MASTER, MPI_COMM_WORLD);
+	free(range);
+}
+
+static void do_master_p(
+	double **p,
+	const int rows,
+	const int cols,
+	int rb,
+	const int size)
+{
+	int curr_even_chunk, curr_odd_chunk, l, source;
+	int i, j, k, proc;
+	int n = rows;
+	int m = cols;
+	int evens = ((n * m) - 2 * (n + m) + 4) / 2 + (n * m % 2 == 0 ? 0 : 1);
+	int odds = ((n * m) - 2 * (n + m) + 4) / 2;
+	int even_chunk_size = evens / (size - 1);
+	int odd_chunk_size = odds / (size - 1);
+	int s_i, s_j, e_i, e_j, first = TRUE;
+	int range_size = 0;
+	int *proc_range_size = NULL;
+	double *range = NULL;
+	double **proc_range = NULL;
+	MPI_Status stat;
+
+	proc = 0;
+	k = 0;
+	for(i = 1; i <= rows - 2; ++i) {
+		for(j = 1; j <= cols - 2; ++j) {
+			curr_even_chunk = (proc == size - 2)
+				? evens - proc * even_chunk_size
+				: even_chunk_size;
+			curr_odd_chunk = (proc == size - 2)
+				? odds - proc * odd_chunk_size
+				: odd_chunk_size;
+
+			if((i + j) % 2 != rb)
+				continue;
+
+			if(first == TRUE) {
+				s_i = i - 1;
+				s_j = j;
+				first = FALSE;
+			}
+
+			++k;
+			if(k == (rb == 0 ? curr_even_chunk : curr_odd_chunk)) {
+				e_i = i + 1;
+				e_j = j;
+				k = 0;
+				first = TRUE;
+				++proc;
+
+				range = copy_poisson_range(p, n, m, s_i, s_j, e_i, e_j,
+					&range_size);
+
+				MPI_Send(&s_i, 1, MPI_INT, proc, proc, MPI_COMM_WORLD);
+				MPI_Send(&s_j, 1, MPI_INT, proc, proc, MPI_COMM_WORLD);
+				MPI_Send(&range_size, 1, MPI_INT, proc, proc, MPI_COMM_WORLD);
+				MPI_Send(&rb, 1, MPI_INT, proc, proc, MPI_COMM_WORLD);
+				MPI_Send(range, range_size, MPI_DOUBLE, proc, proc,
+					MPI_COMM_WORLD);
+				free(range);
+			}
+		}
+	}
+
+	proc_range = (double**)malloc((size - 1) * sizeof(double*));
+	if(!proc_range)
+		return;
+
+	proc_range_size = (int*)malloc((size - 1) * sizeof(int));
+	if(!proc_range_size)
+		return;
+
+	proc = size - 1;
+	while(proc > 0) {
+		MPI_Recv(&range_size, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG,
+			MPI_COMM_WORLD, &stat);
+
+		source = stat.MPI_SOURCE;
+		proc_range[source - 1] = (double*)malloc(range_size * sizeof(double));
+		proc_range_size[source - 1] = range_size;
+		if(!proc_range[source - 1])
+			return;
+
+		MPI_Recv(proc_range[source - 1], range_size, MPI_DOUBLE, source,
+			MPI_ANY_TAG, MPI_COMM_WORLD, &stat);
+		--proc;
+	}
+
+	l = 0;
+	k = cols;
+	for(i = 1; i <= rows - 2; ++i) {
+		for(j = 1; j <= cols - 2; ++j) {
+			if((i + j) % 2 != rb)
+				continue;
+
+			/*while(k < ) {
+				//if(range[k])
+			}*/
+		}
+	}
+
+	/*k = -1;
+	proc = 0;
+	first = TRUE;
+	for(i = 1; i <= rows - 2; ++i) {
+		for(j = 1; j <= cols - 2; ++j) {
+			if(k == proc_range_size[proc]) {
+				k = -1;
+				first = TRUE;
+				++proc;
+			}
+			if(k != -1)
+				++k;
+
+			if((i + j) % 2 != rb)
+				continue;
+
+			if(first == TRUE) {
+				first = FALSE;
+				k = cols;
+			}
+
+			p[i][j] = proc_range[proc][k];
+		}
+	}*/
+
+	for(i = 0; i < size - 1; ++i)
+		free(proc_range[i]);
+	free(proc_range);
+	free(proc_range_size);
+}
+
+static void compute_p(
+	double **p,
+	double **rhs,
+	char **flag,
+	const int imax,
+	const int jmax,
+	const double omega,
+	const double beta_2,
+	const double rdx2,
+	const double rdy2,
+	const int rank,
+	const int size)
+{
+	int rb;
+	int n = imax + 2;
+	int m = jmax + 2;
+
+	for(rb = 0; rb <= 1; ++rb) {
+		(rank == MASTER)
+			? do_master_p(p, n, m, rb, size)
+			: do_slave_p(rhs, flag, n, m, omega, beta_2, rdx2, rdy2);
+	}
+}
+
 /**
  * Red/Black SOR to solve the poisson equation.
  */
@@ -246,9 +509,9 @@ int poisson(
 	double *res,
 	const int ifull)
 {
-	int rank, size, rb;
+	int rank, size;
 	int i, j, iter;
-	double add, beta_2, beta_mod;
+	double add, beta_2;
 	double p0 = 0.0;
 	double rdx2 = 1.0 / (delx * delx);
 	double rdy2 = 1.0 / (dely * dely);
@@ -266,43 +529,20 @@ int poisson(
 
 	/* Red/Black SOR-iteration. */
 	for (iter = 0; iter < itermax; ++iter) {
-		for (rb = 0; rb <= 1; ++rb) {
-			for (i = 1; i <= imax; ++i) {
-				for (j = 1; j <= jmax; ++j) {
-					if ((i + j) % 2 != rb)
-						continue;
+		compute_p(p, rhs, flag, imax, jmax, omega, beta_2, rdx2, rdy2, rank,
+			size);
+		MPI_Barrier(MPI_COMM_WORLD);
 
-					if (flag[i][j] == (C_F | B_NSEW)) {
-						/* Five point star for interior fluid cells. */
-						p[i][j] = (1.0 - omega) * p[i][j] - beta_2
-							* ((p[i + 1][j] + p[i - 1][j]) * rdx2
-								+ (p[i][j + 1] + p[i][j - 1]) * rdy2
-								- rhs[i][j]);
-					} else if (flag[i][j] & C_F) {
-						/* Modified star near boundary. */
-						beta_mod = -omega / ((eps_E + eps_W) * rdx2
-							+(eps_N + eps_S) * rdy2);
-						p[i][j] = (1.0 - omega) * p[i][j] - beta_mod
-							* ((eps_E * p[i + 1][j] + eps_W * p[i - 1][j])
-									* rdx2
-								+ (eps_N * p[i][j + 1] + eps_S * p[i][j - 1])
-									* rdy2
-							- rhs[i][j]);
-					}
-				}
-			}
-		}
-
-		/* Partial computation of residual. */
+		// Partial computation of residual.
 		*res = 0.0;
 		for (i = 1; i <= imax; ++i) {
 			for (j = 1; j <= jmax; ++j) {
 				if (flag[i][j] & C_F) {
 					/* Only fluid cells. */
-					add = (eps_E * (p[i + 1][j] - p[i][j])
-						- eps_W * (p[i][j] - p[i - 1][j])) * rdx2
-						+ (eps_N * (p[i][j + 1] - p[i][j])
-							- eps_S * (p[i][j] - p[i][j - 1])) * rdy2
+					add = (eps_E(i, j) * (p[i + 1][j] - p[i][j])
+						- eps_W(i, j) * (p[i][j] - p[i - 1][j])) * rdx2
+						+ (eps_S(i, j) * (p[i][j + 1] - p[i][j])
+							- eps_N(i, j) * (p[i][j] - p[i][j - 1])) * rdy2
 						- rhs[i][j];
 					*res += add * add;
 				}

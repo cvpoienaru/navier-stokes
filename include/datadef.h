@@ -4,6 +4,9 @@
 /** Define debugging level. */
 #define NS_DEBUG_LEVEL 1
 
+#define FALSE 0
+#define TRUE (!FALSE)
+
 /** This cell is an obstacle/boundary cell. */
 #define C_B 0x0000
 /** This obstacle cell has a fluid cell to the north. */
@@ -36,10 +39,10 @@
  * Macros for computing Poisson, denoting whether there is an obstacle cell
  * adjacent to some direction.
  */
-#define eps_E ((flag[i + 1][j] & C_F) ? 1 : 0)
-#define eps_W ((flag[i - 1][j] & C_F) ? 1 : 0)
-#define eps_N ((flag[i][j + 1] & C_F) ? 1 : 0)
-#define eps_S ((flag[i][j - 1] & C_F) ? 1 : 0)
+#define eps_E(i, j) ((flag[(i) + 1][(j)] & C_F) ? 1 : 0)
+#define eps_W(i, j) ((flag[(i) - 1][(j)] & C_F) ? 1 : 0)
+#define eps_S(i, j) ((flag[(i)][(j) + 1] & C_F) ? 1 : 0)
+#define eps_N(i, j) ((flag[(i)][(j) - 1] & C_F) ? 1 : 0)
 
 void write_ppm(
 	double** u,

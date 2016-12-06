@@ -9,20 +9,6 @@
 #ifndef NS_SIMULATION_H_
 #define NS_SIMULATION_H_
 
-struct sim_element {
-	int row;
-	int column;
-	double result;
-	double north;
-	double south;
-	double east;
-	double west;
-};
-
-struct sim_element* alloc_sim_element(void);
-
-void free_sim_element(struct sim_element **element);
-
 /**
  * Computation of tentative velocity field (f, g).
  */
@@ -53,14 +39,6 @@ void compute_rhs(
 	const double del_t,
 	const double delx,
 	const double dely);
-
-int compute_product_sum(
-	double **p,
-	char **flag,
-	const int imax,
-	const int jmax,
-	const int rank,
-	const int size);
 
 /**
  * Red/Black SOR to solve the poisson equation.
