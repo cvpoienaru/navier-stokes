@@ -32,22 +32,22 @@ NS_SOURCES = $(NS_BIN_SRC)/alloc.c \
 	$(NS_BIN_SRC)/boundary.c \
 	$(NS_BIN_SRC)/init.c \
 	$(NS_BIN_SRC)/output.c \
-	$(NS_BIN_SRC)/simulation.c \
+	$(NS_BIN_SRC)/simulation.cpp \
 	$(NS_BIN_SRC)/main.c
 NS_OBJECTS = $(NS_SOURCES:.c=.o)
 
 # Compiler options
-CC = mpic++
+CC = icc
 CFLAGS = -Wall -O3 $(NS_FLAGS) -pg
-LFLAGS = -lm
+LFLAGS = -lm -ltbb
 
 all: $(NS_SOURCES) $(NS_BIN_OUT)
 
 $(NS_BIN_OUT): $(NS_OBJECTS)
-	$(CC) $^ -o $@ $(LFLAGS)
+	$(CC) -std=c++11 $^ -o $@ $(LFLAGS)
 
 .c.o:
-	$(CC) $(CFLAGS) $< -c -o $@ $(LFLAGS)
+	$(CC) -std=c++11 $(CFLAGS) $< -c -o $@ $(LFLAGS)
 
 .PHONY: clean
 clean:

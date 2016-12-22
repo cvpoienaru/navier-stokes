@@ -18,7 +18,7 @@
 #include <math.h>
 #include <getopt.h>
 #include <errno.h>
-#include <mpi.h>
+#include <unistd.h>
 
 /* Functions used for comparing computations when debugging. */
 unsigned int simplest_checksum_char(char** in, int imax, int jmax)
@@ -131,10 +131,6 @@ int main(int argc, char **argv)
 	init_flag(flag, imax, jmax, delx, dely, &ibound);
 	apply_boundary_conditions(u, v, flag, imax, jmax, ui, vi);
 
-	MPI_Init(&argc, &argv);
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	MPI_Comm_size(MPI_COMM_WORLD, &nprocesses);
-
 	for (t = 0.0; t < t_end; t += del_t, ++iters) {
 		set_timestep_interval(&del_t, imax, jmax, delx, dely, u, v, Re, tau);
 
@@ -149,13 +145,9 @@ int main(int argc, char **argv)
 				eps, itermax, omega, &res, ifluid);
 		}
 
-		MPI_Barrier(MPI_COMM_WORLD);
-
-		if(rank == MASTER) {
-			if(NS_DEBUG_LEVEL) {
-				printf("%d t:%g, del_t:%g, SOR iters:%3d, res:%e, bcells:%d\n",
-					iters, t+del_t, del_t, itersor, res, ibound);
-			}
+		if(NS_DEBUG_LEVEL) {
+			printf("%d t:%g, del_t:%g, SOR iters:%3d, res:%e, bcells:%d\n",
+				iters, t+del_t, del_t, itersor, res, ibound);
 		}
 
 		update_velocity(u, v, f, g, p, flag, imax, jmax, del_t, delx, dely);
@@ -177,10 +169,6 @@ exit:
 		free_matrix(rhs);
 	if(flag)
 		free_matrix(flag);
-
-	MPI_Initialized(&initialized);
-	if(initialized)
-		MPI_Finalize();
 
 	return ret;
 }

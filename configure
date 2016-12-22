@@ -25,7 +25,7 @@
 # of this software, even if advised of the possibility of such damage.
 
 # Project tree structure ...
-export NS_ROOT=~/Work/Projects/NavierStokes/navier-stokes
+export NS_ROOT=~/pp/final-test/tbb-navier-stokes
 export NS_BIN=$NS_ROOT/bin
 export NS_ETC=$NS_ROOT/etc
 export NS_INCLUDE=$NS_ROOT/include
@@ -46,10 +46,11 @@ if $NS_DEBUG; then
 fi
 
 # Environment paths ...
-export C_INCLUDE_PATH=$NS_INCLUDE:/usr/include/mpi
-export CPLUS_INCLUDE_PATH=$NS_INCLUDE:/usr/include/mpi
-export LIBRARY_PATH=$NS_LIB
-export LD_LIBRARY_PATH=$NS_LIB
+export C_INCLUDE_PATH=$NS_INCLUDE:/usr/include/mpi:/usr/include/tbb
+export CPLUS_INCLUDE_PATH=$NS_INCLUDE:/usr/include/mpi:/usr/include/tbb
+export LIBRARY_PATH=$NS_LIB:/export/opt/tools/intel/compilers_and_libraries_2016.2.181/linux/tbb/lib/intel64_lin/gcc4.1:/export/opt/tools/intel/compilers_and_libraries_2016.2.181/linux/tbb/lib/intel64_lin/gcc4.4
+export LD_LIBRARY_PATH=$NS_LIB:/export/opt/tools/intel/compilers_and_libraries_2016.2.181/linux/tbb/lib/intel64_lin/gcc4.1:/export/opt/tools/intel/compilers_and_libraries_2016.2.181/linux/tbb/lib/intel64_lin/gcc4.4$
+
 export PATH=$PATH:$NS_BIN
 
 # Set custom project tree permission mask.
